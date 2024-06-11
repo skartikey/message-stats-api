@@ -4,13 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"message-stats-api/models"
+	"message-stats-api/store"
 	"net/http"
-	"sync"
 )
 
 var (
-	Messages      []models.Message
-	MessagesMutex sync.Mutex
+	messageStore = store.NewStore()
 )
 
 func StoreMessage(w http.ResponseWriter, r *http.Request) {
@@ -26,9 +25,7 @@ func StoreMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	MessagesMutex.Lock()
-	Messages = append(Messages, msg)
-	MessagesMutex.Unlock()
+	messageStore.AddMessage(msg.Sender, msg.Receiver)
 
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprintln(w, "Message stored")

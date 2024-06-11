@@ -9,6 +9,7 @@ import (
 	"math/rand"
 	"message-stats-api/api"
 	"message-stats-api/models"
+	"message-stats-api/store"
 	"net/http"
 	"os"
 	"sync"
@@ -57,6 +58,8 @@ func TestSendMessages(t *testing.T) {
 
 	rand.Seed(time.Now().UnixNano())
 
+	newStore := store.NewStore()
+
 	for i := 0; i < numMessages; i++ {
 		wg.Add(1)
 		go func(i int) {
@@ -96,13 +99,26 @@ func TestSendMessages(t *testing.T) {
 			} else {
 				t.Errorf("sender or receiver number is not 10 digits long")
 			}
+
+			// Save message in newStore
+			newStore.Lock()
+			if newStore.Data == nil {
+				newStore.Data = make(map[string]map[string]int)
+			}
+			senderRange := sender[:len(sender)-5]
+			receiverRange := receiver[:len(receiver)-5]
+			if newStore.Data[senderRange] == nil {
+				newStore.Data[senderRange] = make(map[string]int)
+			}
+			newStore.Data[senderRange][receiverRange]++
+			newStore.Unlock()
 		}(i)
 	}
 	wg.Wait()
 
 	t.Logf("Sent %d messages", sentCount)
 
-	printMessageCountBySenderAndRange()
+	printMessageCountBySenderAndRange(newStore)
 }
 
 // generateNumber generates a random 10-digit number as a string
@@ -129,23 +145,11 @@ func sendMessage(sender, receiver, text string) error {
 	return nil
 }
 
-func printMessageCountBySenderAndRange() {
-	messageCount := make(map[string]map[string]int)
+func printMessageCountBySenderAndRange(store *store.Store) {
+	store.RLock()
+	defer store.RUnlock()
 
-	api.MessagesMutex.Lock()
-	defer api.MessagesMutex.Unlock()
-
-	for _, msg := range api.Messages {
-		senderRange := msg.Sender[:len(msg.Sender)-5]
-		receiverRange := msg.Receiver[:len(msg.Receiver)-5]
-
-		if messageCount[senderRange] == nil {
-			messageCount[senderRange] = make(map[string]int)
-		}
-		messageCount[senderRange][receiverRange]++
-	}
-
-	for sender, receiverMap := range messageCount {
+	for sender, receiverMap := range store.Data {
 		for receiver, count := range receiverMap {
 			fmt.Printf("Sender range: %s, Receiver range: %s, Message count: %d\n", sender, receiver, count)
 		}
