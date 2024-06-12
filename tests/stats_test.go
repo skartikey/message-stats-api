@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"log"
 	"math/rand"
 	"message-stats-api/api"
 	"message-stats-api/models"
@@ -24,7 +25,11 @@ func TestSendMessages(t *testing.T) {
 
 	rand.Seed(time.Now().UnixNano())
 
-	newStore := store.NewStore()
+	// Create a new store instance
+	newStore, err := store.NewStore()
+	if err != nil {
+		log.Fatalf("Error initializing message store: %v", err)
+	}
 
 	// Create a test server
 	ts := httptest.NewServer(api.StoreMessage(newStore))
@@ -78,7 +83,10 @@ func TestSendMessages(t *testing.T) {
 
 	t.Logf("Sent %d messages", sentCount)
 
-	newStore.PrintMessageCountBySenderAndRange()
+	err = newStore.PrintMessageCountBySenderAndRange()
+	if err != nil {
+		t.Errorf("failed to print message count: %v", err)
+	}
 }
 
 // generateNumber generates a random 10-digit number as a string

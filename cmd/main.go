@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"github.com/go-redis/redis/v8"
 	"github.com/joho/godotenv"
 	"log"
 	"message-stats-api/api"
@@ -16,21 +15,6 @@ import (
 func main() {
 	loadEnv()
 
-	redisHost := os.Getenv("REDIS_HOST")
-	redisPort := os.Getenv("REDIS_PORT")
-
-	rdb := redis.NewClient(&redis.Options{
-		Addr: redisHost + ":" + redisPort,
-	})
-
-	// Check the connection
-	_, err := rdb.Ping(context.Background()).Result()
-	if err != nil {
-		log.Fatalf("Could not connect to Redis: %v", err)
-	}
-
-	log.Println("Connected to Redis")
-
 	serveApplication()
 }
 
@@ -40,30 +24,39 @@ func loadEnv() {
 	}
 }
 
+// serveApplication starts the HTTP server and sets up graceful shutdown
 func serveApplication() {
 	// Create a new store instance
-	messageStore := store.NewStore()
+	messageStore, err := store.NewStore()
+	if err != nil {
+		log.Fatalf("Error initializing message store: %v", err)
+	}
 
 	// Pass the store instance to the StoreMessage handler
 	http.HandleFunc("/store-message", api.StoreMessage(messageStore))
 
+	// Define the server
 	server := &http.Server{
 		Addr:    ":8080",
 		Handler: http.DefaultServeMux,
 	}
 
+	// Channel to listen for interrupt signals
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt)
 
+	// Start the server in a new goroutine
 	go func() {
 		log.Println("Starting server on port 8080")
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Could not listen on port 8080: %v\n", err)
+			log.Fatalf("Could not listen on port 8080: %v", err)
 		}
 	}()
 
+	// Wait for interrupt signal
 	<-stop
 
+	// Create a context with timeout for server shutdown
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 

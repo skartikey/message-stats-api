@@ -10,6 +10,12 @@ import (
 
 func StoreMessage(store *store.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Ensure the request is a POST request
+		if r.Method != http.MethodPost {
+			http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+			return
+		}
+
 		var msg models.Message
 		if err := json.NewDecoder(r.Body).Decode(&msg); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -22,7 +28,10 @@ func StoreMessage(store *store.Store) http.HandlerFunc {
 			return
 		}
 
-		store.AddMessage(msg.Sender, msg.Receiver)
+		err := store.AddMessage(msg.Sender, msg.Receiver)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintln(w, "Message stored")
