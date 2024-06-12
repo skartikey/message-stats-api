@@ -2,8 +2,11 @@ package main
 
 import (
 	"context"
+	"github.com/go-redis/redis/v8"
+	"github.com/joho/godotenv"
 	"log"
 	"message-stats-api/api"
+	"message-stats-api/store"
 	"net/http"
 	"os"
 	"os/signal"
@@ -11,7 +14,38 @@ import (
 )
 
 func main() {
-	http.HandleFunc("/store-message", api.StoreMessage)
+	loadEnv()
+
+	redisHost := os.Getenv("REDIS_HOST")
+	redisPort := os.Getenv("REDIS_PORT")
+
+	rdb := redis.NewClient(&redis.Options{
+		Addr: redisHost + ":" + redisPort,
+	})
+
+	// Check the connection
+	_, err := rdb.Ping(context.Background()).Result()
+	if err != nil {
+		log.Fatalf("Could not connect to Redis: %v", err)
+	}
+
+	log.Println("Connected to Redis")
+
+	serveApplication()
+}
+
+func loadEnv() {
+	if err := godotenv.Load(".env"); err != nil {
+		log.Fatalf("Error loading .env file: %v", err)
+	}
+}
+
+func serveApplication() {
+	// Create a new store instance
+	messageStore := store.NewStore()
+
+	// Pass the store instance to the StoreMessage handler
+	http.HandleFunc("/store-message", api.StoreMessage(messageStore))
 
 	server := &http.Server{
 		Addr:    ":8080",

@@ -20,8 +20,8 @@ func (s *Store) AddMessage(sender, receiver string) {
 	s.Lock()
 	defer s.Unlock()
 
-	senderRange := sender[:len(sender)-5]
-	receiverRange := receiver[:len(receiver)-5]
+	senderRange := sender                       // save full sender
+	receiverRange := receiver[:len(receiver)-5] // save prefix, trimming last 5 char
 
 	if s.sendReceRangeMap[senderRange] == nil {
 		s.sendReceRangeMap[senderRange] = make(map[string]int)

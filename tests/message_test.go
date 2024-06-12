@@ -47,9 +47,12 @@ func TestSendMessages(t *testing.T) {
 			case i < 3000:
 				sender = fmt.Sprintf("34567%05d", rand.Intn(100))
 				receiver = fmt.Sprintf("76543%05d", rand.Intn(100))
+			case i < 4000:
+				sender = fmt.Sprintf("fb34567%05d", rand.Intn(100))
+				receiver = fmt.Sprintf("fb76543%05d", rand.Intn(100))
 			case i < 7000:
-				sender = fmt.Sprintf("45678%05d", rand.Intn(100))
-				receiver = fmt.Sprintf("87654%05d", rand.Intn(100))
+				sender = fmt.Sprintf("v45678%05d", rand.Intn(400))
+				receiver = fmt.Sprintf("v87654%09d", rand.Intn(400))
 			case i < 9990:
 				sender = fmt.Sprintf("56789%05d", rand.Intn(100))
 				receiver = fmt.Sprintf("98765%05d", rand.Intn(100))
