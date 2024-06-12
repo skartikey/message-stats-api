@@ -2,53 +2,19 @@ package tests
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"math/rand"
 	"message-stats-api/api"
 	"message-stats-api/models"
 	"message-stats-api/store"
 	"net/http"
-	"os"
+	"net/http/httptest"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 )
-
-func TestMain(m *testing.M) {
-	// Start the server
-	http.HandleFunc("/store-message", api.StoreMessage)
-
-	server := &http.Server{
-		Addr:    ":8080",
-		Handler: http.DefaultServeMux,
-	}
-
-	go func() {
-		log.Println("Starting server on port 8080")
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Could not listen on port 8080: %v\n", err)
-		}
-	}()
-
-	// Wait for server to start
-	time.Sleep(time.Second)
-
-	// Run tests
-	code := m.Run()
-
-	// Shutdown server after tests
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := server.Shutdown(ctx); err != nil {
-		log.Fatalf("Server forced to shutdown: %v", err)
-	}
-
-	os.Exit(code)
-}
 
 func TestSendMessages(t *testing.T) {
 	var wg sync.WaitGroup
@@ -59,6 +25,10 @@ func TestSendMessages(t *testing.T) {
 	rand.Seed(time.Now().UnixNano())
 
 	newStore := store.NewStore()
+
+	// Create a test server
+	ts := httptest.NewServer(api.StoreMessage(newStore))
+	defer ts.Close()
 
 	for i := 0; i < numMessages; i++ {
 		wg.Add(1)
@@ -90,35 +60,22 @@ func TestSendMessages(t *testing.T) {
 
 			text := "Hello"
 
-			if len(sender) == 10 && len(receiver) == 10 {
-				if err := sendMessage(sender, receiver, text); err != nil {
+			if len(sender) >= 1 && len(sender) <= 20 && len(receiver) >= 10 && len(receiver) <= 15 {
+				if err := sendMessage(ts.URL, sender, receiver, text); err != nil {
 					t.Errorf("failed to send message: %v", err)
 				} else {
 					atomic.AddInt32(&sentCount, 1)
 				}
 			} else {
-				t.Errorf("sender or receiver number is not 10 digits long")
+				t.Errorf("sender or receiver number is not of valid length")
 			}
-
-			// Save message in newStore
-			newStore.Lock()
-			if newStore.Data == nil {
-				newStore.Data = make(map[string]map[string]int)
-			}
-			senderRange := sender[:len(sender)-5]
-			receiverRange := receiver[:len(receiver)-5]
-			if newStore.Data[senderRange] == nil {
-				newStore.Data[senderRange] = make(map[string]int)
-			}
-			newStore.Data[senderRange][receiverRange]++
-			newStore.Unlock()
 		}(i)
 	}
 	wg.Wait()
 
 	t.Logf("Sent %d messages", sentCount)
 
-	printMessageCountBySenderAndRange(newStore)
+	newStore.PrintMessageCountBySenderAndRange()
 }
 
 // generateNumber generates a random 10-digit number as a string
@@ -126,14 +83,14 @@ func generateNumber() string {
 	return fmt.Sprintf("%010d", rand.Intn(10000000000))
 }
 
-func sendMessage(sender, receiver, text string) error {
+func sendMessage(url, sender, receiver, text string) error {
 	msg := models.Message{Sender: sender, Receiver: receiver, Text: text}
 	body, err := json.Marshal(msg)
 	if err != nil {
 		return err
 	}
 
-	resp, err := http.Post("http://localhost:8080/store-message", "application/json", bytes.NewBuffer(body))
+	resp, err := http.Post(url+"/store-message", "application/json", bytes.NewBuffer(body))
 	if err != nil {
 		return err
 	}
@@ -143,15 +100,4 @@ func sendMessage(sender, receiver, text string) error {
 		return fmt.Errorf("expected status OK but got %v", resp.StatusCode)
 	}
 	return nil
-}
-
-func printMessageCountBySenderAndRange(store *store.Store) {
-	store.RLock()
-	defer store.RUnlock()
-
-	for sender, receiverMap := range store.Data {
-		for receiver, count := range receiverMap {
-			fmt.Printf("Sender range: %s, Receiver range: %s, Message count: %d\n", sender, receiver, count)
-		}
-	}
 }
