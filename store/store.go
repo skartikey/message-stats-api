@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/redis/go-redis/v9"
 	"log"
+	"message-stats-api/models"
 	"os"
 	"sync"
 )
@@ -43,20 +44,27 @@ func NewStore() (*Store, error) {
 }
 
 // AddMessage increments the message count for a given sender and receiver
-func (s *Store) AddMessage(sender, receiver string) error {
+func (s *Store) AddMessage(sender, receiver string) (models.ResData, error) {
 	s.Lock()
 	defer s.Unlock()
 	senderRange := sender                       // Save full sender
 	receiverRange := receiver[:len(receiver)-5] // Save prefix, trimming last 5 char
 
 	// Increment the message count in Redis hash
-	_, err := s.client.HIncrBy(s.ctx, senderRange, receiverRange, 1).Result()
+	curCount, err := s.client.HIncrBy(s.ctx, senderRange, receiverRange, 1).Result()
 	if err != nil {
-		return fmt.Errorf("failed to increment message count: %w", err)
+		return models.ResData{}, fmt.Errorf("failed to increment message count: %w", err)
 	}
 
-	log.Printf("Message count incremented for sender: %s, receiver: %s\n", senderRange, receiverRange)
-	return nil
+	// Prepare the response data
+	resData := models.ResData{
+		Sender:   sender,
+		Receiver: receiver,
+		Count:    curCount,
+	}
+
+	log.Printf("Message count incremented for sender: %s, receiver: %s, count: %d\n", senderRange, receiverRange, curCount)
+	return resData, nil
 }
 
 // PrintMessageCountBySenderAndRange prints the message counts for all senders and receiver ranges

@@ -7,19 +7,12 @@ type Message struct {
 }
 
 type Response struct {
-	Status  string        `json:"status"`
-	Data    ResData       `json:"data"`
-	Message string        `json:"message"`
-	Error   ErrorResponse `json:"error"`
+	Data    ResData `json:"data"`
+	Message string  `json:"message"`
 }
 
 type ResData struct {
 	Sender   string `json:"sender"`
 	Receiver string `json:"receiver"`
-	Count    int    `json:"count"`
-}
-
-type ErrorResponse struct {
-	Code        int    `json:"code"`
-	Description string `json:"message"`
+	Count    int64  `json:"count"`
 }
