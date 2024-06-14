@@ -32,8 +32,9 @@ func serveApplication() {
 		log.Fatalf("Error initializing message store: %v", err)
 	}
 
-	// Pass the store instance to the StoreMessage handler
-	http.HandleFunc("/store-message", api.StoreMessage(messageStore))
+	// Pass the store instance to the handlers
+	http.HandleFunc("/store", api.Store(messageStore))
+	http.HandleFunc("/stats", api.Stats(messageStore))
 
 	// Define the server
 	server := &http.Server{

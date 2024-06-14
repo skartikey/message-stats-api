@@ -2,17 +2,16 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/redis/go-redis/v9"
 	"log"
 	"message-stats-api/models"
 	"os"
-	"sync"
 )
 
 // Store represents a Redis-backed store for messages
 type Store struct {
-	sync.RWMutex
 	client *redis.Client
 	ctx    context.Context
 }
@@ -44,16 +43,14 @@ func NewStore() (*Store, error) {
 }
 
 // AddMessage increments the message count for a given sender and receiver
-func (s *Store) AddMessage(sender, receiver string) (models.ResData, error) {
-	s.Lock()
-	defer s.Unlock()
+func (s *Store) AddMessage(sender, receiver string) (*models.ResData, error) {
 	senderRange := sender                       // Save full sender
 	receiverRange := receiver[:len(receiver)-5] // Save prefix, trimming last 5 char
 
 	// Increment the message count in Redis hash
 	curCount, err := s.client.HIncrBy(s.ctx, senderRange, receiverRange, 1).Result()
 	if err != nil {
-		return models.ResData{}, fmt.Errorf("failed to increment message count: %w", err)
+		return &models.ResData{}, fmt.Errorf("failed to increment message count: %w", err)
 	}
 
 	// Prepare the response data
@@ -64,14 +61,40 @@ func (s *Store) AddMessage(sender, receiver string) (models.ResData, error) {
 	}
 
 	log.Printf("Message count incremented for sender: %s, receiver: %s, count: %d\n", senderRange, receiverRange, curCount)
+	return &resData, nil
+}
+
+func (s *Store) GetMessage(sender, receiver string) (*models.ResData, error) {
+	// Define sender range and receiver range safely
+	senderRange := sender
+	var receiverRange string
+	if len(receiver) > 5 {
+		receiverRange = receiver[:len(receiver)-5]
+	} else {
+		receiverRange = receiver
+	}
+
+	// Get count for a given sender and receiver
+	curCount, err := s.client.Get(s.ctx, fmt.Sprintf("message_count:%s:%s", sender, receiver)).Int64()
+	if errors.Is(err, redis.Nil) {
+		curCount = 0 // Handle the case where the key does not exist
+	} else if err != nil {
+		return &models.ResData{}, fmt.Errorf("failed to get message count: %w", err)
+	}
+
+	// Prepare the response data
+	resData := &models.ResData{
+		Sender:   sender,
+		Receiver: receiver,
+		Count:    curCount,
+	}
+
+	log.Printf("Message count returned for sender: %s, receiver: %s, count: %d\n", senderRange, receiverRange, curCount)
 	return resData, nil
 }
 
 // PrintMessageCountBySenderAndRange prints the message counts for all senders and receiver ranges
 func (s *Store) PrintMessageCountBySenderAndRange() error {
-	s.RLock()
-	defer s.RUnlock()
-
 	// Retrieve all keys from Redis
 	keys, err := s.client.Keys(s.ctx, "*").Result()
 	if err != nil {

@@ -32,7 +32,7 @@ func TestSendMessages(t *testing.T) {
 	}
 
 	// Create a test server
-	ts := httptest.NewServer(api.StoreMessage(newStore))
+	ts := httptest.NewServer(api.Store(newStore))
 	defer ts.Close()
 
 	for i := 0; i < numMessages; i++ {
@@ -54,10 +54,10 @@ func TestSendMessages(t *testing.T) {
 				receiver = fmt.Sprintf("76543%05d", rand.Intn(100))
 			case i < 4000:
 				sender = fmt.Sprintf("fb34567%05d", rand.Intn(100))
-				receiver = fmt.Sprintf("fb76543%05d", rand.Intn(100))
+				receiver = fmt.Sprintf("9876543%05d", rand.Intn(100))
 			case i < 7000:
 				sender = fmt.Sprintf("v45678%05d", rand.Intn(400))
-				receiver = fmt.Sprintf("v87654%09d", rand.Intn(400))
+				receiver = fmt.Sprintf("87654%09d", rand.Intn(400))
 			case i < 9990:
 				sender = fmt.Sprintf("56789%05d", rand.Intn(100))
 				receiver = fmt.Sprintf("98765%05d", rand.Intn(100))
@@ -69,7 +69,7 @@ func TestSendMessages(t *testing.T) {
 			text := "Hello"
 
 			if len(sender) >= 1 && len(sender) <= 20 && len(receiver) >= 10 && len(receiver) <= 15 {
-				if err := sendMessage(ts.URL, sender, receiver, text); err != nil {
+				if err := sendMessage(ts.URL, sender, receiver, &text); err != nil {
 					t.Errorf("failed to send message: %v", err)
 				} else {
 					atomic.AddInt32(&sentCount, 1)
@@ -94,14 +94,14 @@ func generateNumber() string {
 	return fmt.Sprintf("%010d", rand.Intn(10000000000))
 }
 
-func sendMessage(url, sender, receiver, text string) error {
+func sendMessage(url, sender, receiver string, text *string) error {
 	msg := models.Message{Sender: sender, Receiver: receiver, Text: text}
 	body, err := json.Marshal(msg)
 	if err != nil {
 		return err
 	}
 
-	resp, err := http.Post(url+"/store-message", "application/json", bytes.NewBuffer(body))
+	resp, err := http.Post(url+"/store", "application/json", bytes.NewBuffer(body))
 	if err != nil {
 		return err
 	}
